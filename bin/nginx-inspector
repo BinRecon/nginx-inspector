@@ -1,4 +1,6 @@
 #!/bin/bash
+# Nginx Inspector Command Line Interface
+# This script provides the main entry point for nginx-inspector commands
 
 # Color codes
 RED='\033[0;31m'
@@ -9,68 +11,196 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 INSTALL_DIR="/usr/local/nginx-inspector"
+VENV_DIR="$INSTALL_DIR/venv"
+API_SERVER="$INSTALL_DIR/api/api-server.py"
+SHELL_ANALYZER="$INSTALL_DIR/bin/nginx-inspector.sh"
+ATTACK_DETECTOR="$INSTALL_DIR/bin/attack-detector.sh"
+WEB_DASHBOARD="$INSTALL_DIR/web/index.html"
 
-
-progress_bar() {
-    local duration=$1
-    already_done() { for ((done=0; done<$elapsed; done++)); do printf "▓"; done }
-    remaining() { for ((remain=$elapsed; remain<$duration; remain++)); do printf "░"; done }
-    elapsed=0
-    while [ $elapsed -le $duration ]; do
-        printf "\rProgress : ["
-        already_done
-        remaining
-        printf "] %s%%" $((elapsed*100/duration))
-        sleep 0.1
-        ((elapsed++))
-    done
-    echo -e "\n${GREEN}Done!${NC}"
+# Function to display version
+show_version() {
+    echo -e "${CYAN}Nginx Inspector${NC} v1.0.0"
+    echo "Advanced Nginx Log Analyzer with Web Dashboard & REST API"
 }
 
+# Function to display help
+show_help() {
+    echo -e "${CYAN}Nginx Inspector - Command Line Interface${NC}"
+    echo ""
+    echo -e "${GREEN}Usage:${NC}"
+    echo "  nginx-inspector [COMMAND] [OPTIONS]"
+    echo ""
+    echo -e "${GREEN}Commands:${NC}"
+    echo "  start                         Start nginx-inspector service"
+    echo "  stop                          Stop nginx-inspector service"
+    echo "  restart                       Restart nginx-inspector service"
+    echo "  status                        Show service status"
+    echo "  analyze <logfile>             Analyze a specific nginx log file"
+    echo "  attack <logfile>              Run security threat detection"
+    echo "  api                           Start REST API server (port 8765)"
+    echo "  web                           Open web dashboard"
+    echo "  version                       Show version information"
+    echo "  help                          Show this help message"
+    echo ""
+    echo -e "${GREEN}Examples:${NC}"
+    echo "  nginx-inspector start"
+    echo "  nginx-inspector analyze /var/log/nginx/access.log"
+    echo "  nginx-inspector attack /var/log/nginx/access.log"
+    echo "  nginx-inspector api"
+    echo ""
+}
+
+# Function to check if running as root
+check_root() {
+    if [ "$EUID" -eq 0 ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Main command handler
 case "$1" in
-
-start)
-  sudo systemctl start nginx-inspector
-  ;;
-
-stop)
-  sudo systemctl stop nginx-inspector
-  ;;
-
-restart)
-  sudo systemctl restart nginx-inspector
-  ;;
-
-status)
-  sudo systemctl status nginx-inspector
-  ;;
-
-analyze)
-  bash $INSTALL_DIR/bin/nginx-inspector.sh $2
-  ;;
-
-attack)
-  bash $INSTALL_DIR/bin/attack-detector.sh $2
-  ;;
-
-api)
-  echo "Starting API server..."
-  $INSTALL_DIR/venv/bin/python $INSTALL_DIR/api/api-server.py
-  ;;
-
-web)
-  echo "Opening Web Dashboard..."
-  xdg-open $INSTALL_DIR/web/dashboard.html
-  ;;
-
-*)
-  echo "Usage:"
-  echo "nginx-inspector start         # start service"
-  echo "nginx-inspector stop          # stop service"
-  echo "nginx-inspector status        # service status"
-  echo "nginx-inspector analyze <logfile>"
-  echo "nginx-inspector attack <logfile>"
-  echo "nginx-inspector api           # run API server"
-  echo "nginx-inspector web           # open dashboard"
-  ;;
+    start)
+        echo -e "${BLUE}Starting nginx-inspector service...${NC}"
+        sudo systemctl start nginx-inspector
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Service started successfully${NC}"
+            echo -e "${CYAN}API Server: http://localhost:8765${NC}"
+            echo -e "${CYAN}Web Dashboard: http://localhost:8080${NC}"
+        else
+            echo -e "${RED}✗ Failed to start service${NC}"
+            exit 1
+        fi
+        ;;
+    
+    stop)
+        echo -e "${BLUE}Stopping nginx-inspector service...${NC}"
+        sudo systemctl stop nginx-inspector
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Service stopped successfully${NC}"
+        else
+            echo -e "${RED}✗ Failed to stop service${NC}"
+            exit 1
+        fi
+        ;;
+    
+    restart)
+        echo -e "${BLUE}Restarting nginx-inspector service...${NC}"
+        sudo systemctl restart nginx-inspector
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Service restarted successfully${NC}"
+        else
+            echo -e "${RED}✗ Failed to restart service${NC}"
+            exit 1
+        fi
+        ;;
+    
+    status)
+        echo -e "${BLUE}Checking service status...${NC}"
+        sudo systemctl status nginx-inspector
+        ;;
+    
+    analyze)
+        if [ -z "$2" ]; then
+            echo -e "${RED}✗ Error: Log file path required${NC}"
+            echo "Usage: nginx-inspector analyze <logfile>"
+            exit 1
+        fi
+        
+        if [ ! -f "$2" ]; then
+            echo -e "${RED}✗ Error: Log file not found: $2${NC}"
+            exit 1
+        fi
+        
+        echo -e "${BLUE}Analyzing log file: $2${NC}"
+        if [ -f "$SHELL_ANALYZER" ]; then
+            bash "$SHELL_ANALYZER" "$2"
+        else
+            echo -e "${RED}✗ Error: Analyzer script not found${NC}"
+            exit 1
+        fi
+        ;;
+    
+    attack)
+        if [ -z "$2" ]; then
+            echo -e "${RED}✗ Error: Log file path required${NC}"
+            echo "Usage: nginx-inspector attack <logfile>"
+            exit 1
+        fi
+        
+        if [ ! -f "$2" ]; then
+            echo -e "${RED}✗ Error: Log file not found: $2${NC}"
+            exit 1
+        fi
+        
+        echo -e "${BLUE}Running threat detection on: $2${NC}"
+        if [ -f "$ATTACK_DETECTOR" ]; then
+            bash "$ATTACK_DETECTOR" "$2"
+        else
+            echo -e "${RED}✗ Error: Attack detector script not found${NC}"
+            exit 1
+        fi
+        ;;
+    
+    api)
+        echo -e "${BLUE}Starting API server...${NC}"
+        if [ ! -f "$API_SERVER" ]; then
+            echo -e "${RED}✗ Error: API server not found at $API_SERVER${NC}"
+            exit 1
+        fi
+        
+        if [ ! -d "$VENV_DIR" ]; then
+            echo -e "${RED}✗ Error: Virtual environment not found${NC}"
+            echo "Please reinstall: bash install.sh"
+            exit 1
+        fi
+        
+        echo -e "${GREEN}✓ API server running at http://localhost:8765${NC}"
+        echo -e "${YELLOW}Press Ctrl+C to stop${NC}"
+        echo ""
+        
+        # Source virtual environment and run API server
+        source "$VENV_DIR/bin/activate"
+        python "$API_SERVER"
+        ;;
+    
+    web)
+        echo -e "${BLUE}Opening web dashboard...${NC}"
+        if [ ! -f "$WEB_DASHBOARD" ]; then
+            echo -e "${RED}✗ Error: Web dashboard not found${NC}"
+            exit 1
+        fi
+        
+        # Check if browser is available
+        if command -v xdg-open &> /dev/null; then
+            xdg-open "file://$WEB_DASHBOARD"
+        elif command -v open &> /dev/null; then
+            open "file://$WEB_DASHBOARD"
+        else
+            echo -e "${YELLOW}⚠ Could not open browser automatically${NC}"
+            echo -e "${CYAN}Open manually: file://$WEB_DASHBOARD${NC}"
+        fi
+        ;;
+    
+    version|--version|-v)
+        show_version
+        ;;
+    
+    help|--help|-h)
+        show_help
+        ;;
+    
+    *)
+        if [ -z "$1" ]; then
+            show_help
+        else
+            echo -e "${RED}✗ Unknown command: $1${NC}"
+            echo ""
+            show_help
+            exit 1
+        fi
+        ;;
 esac
+
+exit 0
