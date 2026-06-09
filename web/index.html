@@ -7,9 +7,118 @@
     <link rel="stylesheet" href="assets/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.css" rel="stylesheet">
+    <style>
+        /* Loading and Error States */
+        #pageLoader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(102, 126, 234, 0.3);
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        #errorMessage {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: #f56565;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(245, 101, 101, 0.4);
+            display: none;
+            z-index: 1999;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #667eea;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            z-index: 1998;
+            animation: slideInUp 0.3s ease;
+            transition: all 0.3s ease;
+            opacity: 0;
+        }
+        
+        .toast.show {
+            opacity: 1;
+        }
+        
+        .toast-success {
+            background: #48bb78;
+        }
+        
+        .toast-error {
+            background: #f56565;
+        }
+        
+        .toast-warning {
+            background: #f6ad55;
+        }
+        
+        @keyframes slideInUp {
+            from {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
     <div class="app-container">
+        <!-- Loading Indicator -->
+        <div id="pageLoader">
+            <div class="spinner"></div>
+        </div>
+        
+        <!-- Error Message -->
+        <div id="errorMessage">
+            <span class="error-text">Error loading data</span>
+        </div>
+
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
             <div class="sidebar-header">
@@ -93,8 +202,8 @@
                             </div>
                             <div class="stat-content">
                                 <h3>Total Requests</h3>
-                                <p class="stat-value">125,480</p>
-                                <span class="stat-change positive">+12.5% today</span>
+                                <p class="stat-value">--</p>
+                                <span class="stat-change positive">Loading...</span>
                             </div>
                         </div>
 
@@ -104,8 +213,8 @@
                             </div>
                             <div class="stat-content">
                                 <h3>Errors (4xx, 5xx)</h3>
-                                <p class="stat-value">2,847</p>
-                                <span class="stat-change negative">+5.3% today</span>
+                                <p class="stat-value">--</p>
+                                <span class="stat-change negative">Loading...</span>
                             </div>
                         </div>
 
@@ -115,8 +224,8 @@
                             </div>
                             <div class="stat-content">
                                 <h3>Security Alerts</h3>
-                                <p class="stat-value">34</p>
-                                <span class="stat-change negative">+2 this hour</span>
+                                <p class="stat-value">--</p>
+                                <span class="stat-change negative">Loading...</span>
                             </div>
                         </div>
 
@@ -126,8 +235,8 @@
                             </div>
                             <div class="stat-content">
                                 <h3>Bandwidth Used</h3>
-                                <p class="stat-value">2.34 GB</p>
-                                <span class="stat-change positive">-3.2% today</span>
+                                <p class="stat-value">--</p>
+                                <span class="stat-change positive">Loading...</span>
                             </div>
                         </div>
                     </div>
@@ -172,28 +281,7 @@
                                 </thead>
                                 <tbody id="topIpsTable">
                                     <tr>
-                                        <td><span class="ip-badge">192.168.1.100</span></td>
-                                        <td><strong>5,234</strong></td>
-                                        <td><span class="badge badge-success">Clean</span></td>
-                                        <td>2 mins ago</td>
-                                    </tr>
-                                    <tr>
-                                        <td><span class="ip-badge">10.0.0.50</span></td>
-                                        <td><strong>3,847</strong></td>
-                                        <td><span class="badge badge-success">Clean</span></td>
-                                        <td>5 mins ago</td>
-                                    </tr>
-                                    <tr>
-                                        <td><span class="ip-badge">203.45.67.89</span></td>
-                                        <td><strong>2,156</strong></td>
-                                        <td><span class="badge badge-warning">Suspicious</span></td>
-                                        <td>1 min ago</td>
-                                    </tr>
-                                    <tr>
-                                        <td><span class="ip-badge">45.142.182.99</span></td>
-                                        <td><strong>1,923</strong></td>
-                                        <td><span class="badge badge-danger">Blocked</span></td>
-                                        <td>Just now</td>
+                                        <td colspan="4" class="text-center">Loading...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -215,28 +303,7 @@
                                 </thead>
                                 <tbody id="topUrlsTable">
                                     <tr>
-                                        <td><code>/api/v1/users</code></td>
-                                        <td><strong>2,847</strong></td>
-                                        <td>145ms</td>
-                                        <td><span class="badge badge-success">200 OK</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>/index.html</code></td>
-                                        <td><strong>1,920</strong></td>
-                                        <td>89ms</td>
-                                        <td><span class="badge badge-success">200 OK</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>/api/v1/admin</code></td>
-                                        <td><strong>342</strong></td>
-                                        <td>234ms</td>
-                                        <td><span class="badge badge-warning">403 Forbidden</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>/admin</code></td>
-                                        <td><strong>156</strong></td>
-                                        <td>78ms</td>
-                                        <td><span class="badge badge-danger">404 Not Found</span></td>
+                                        <td colspan="4" class="text-center">Loading...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -244,53 +311,42 @@
                     </div>
                 </div>
 
+                <!-- Log Analysis Page -->
+                <div class="page" id="logs">
+                    <div class="page-header">
+                        <h2>Log Analysis</h2>
+                        <button class="btn-primary" id="refreshLogsBtn">Refresh</button>
+                    </div>
+                    <p class="text-center" style="padding: 20px;">Loading log analysis...</p>
+                </div>
+
                 <!-- Security Threats Page -->
                 <div class="page" id="security">
                     <div class="page-header">
                         <h2>Security Threats Detection</h2>
-                        <button class="btn-primary">Scan Now</button>
+                        <button class="btn-primary" id="refreshSecurityBtn">Scan Now</button>
                     </div>
 
                     <div class="alerts-section">
-                        <div class="alert-item alert-danger">
-                            <div class="alert-icon">
-                                <i class="fas fa-exclamation-triangle"></i>
-                            </div>
-                            <div class="alert-content">
-                                <h4>SQL Injection Attempt Detected</h4>
-                                <p>IP: 45.142.182.99 | Time: 2 mins ago</p>
-                                <p>Request: <code>GET /search?q=1' OR '1'='1</code></p>
-                                <span class="badge badge-danger">Critical</span>
-                            </div>
-                            <button class="btn-small">Block IP</button>
-                        </div>
-
-                        <div class="alert-item alert-warning">
-                            <div class="alert-icon">
-                                <i class="fas fa-shield-alt"></i>
-                            </div>
-                            <div class="alert-content">
-                                <h4>Brute Force Attack Pattern Detected</h4>
-                                <p>IP: 203.45.67.89 | Time: 5 mins ago</p>
-                                <p>429 requests in 2 minutes from single IP</p>
-                                <span class="badge badge-warning">High</span>
-                            </div>
-                            <button class="btn-small">Rate Limit</button>
-                        </div>
-
-                        <div class="alert-item alert-info">
-                            <div class="alert-icon">
-                                <i class="fas fa-info-circle"></i>
-                            </div>
-                            <div class="alert-content">
-                                <h4>Scanner Tool Detected (nikto)</h4>
-                                <p>IP: 192.168.1.200 | Time: 10 mins ago</p>
-                                <p>User-Agent: nikto/2.1.5</p>
-                                <span class="badge badge-info">Medium</span>
-                            </div>
-                            <button class="btn-small">Investigate</button>
-                        </div>
+                        <p class="text-center" style="padding: 20px;">Loading threats...</p>
                     </div>
+                </div>
+
+                <!-- Traffic Analysis Page -->
+                <div class="page" id="traffic">
+                    <div class="page-header">
+                        <h2>Traffic Analysis</h2>
+                        <button class="btn-primary" id="refreshTrafficBtn">Refresh</button>
+                    </div>
+                    <p class="text-center" style="padding: 20px;">Loading traffic data...</p>
+                </div>
+
+                <!-- Reports Page -->
+                <div class="page" id="reports">
+                    <div class="page-header">
+                        <h2>Reports</h2>
+                    </div>
+                    <p class="text-center" style="padding: 20px;">Loading reports...</p>
                 </div>
 
                 <!-- Settings Page -->
@@ -300,18 +356,7 @@
                     </div>
 
                     <div class="settings-form">
-                        <div class="form-section">
-                            <h3>Log Configuration</h3>
-                            <div class="form-group">
-                                <label>Log File Path</label>
-                                <input type="text" value="/var/log/nginx/access.log" placeholder="Enter log file path">
-                            </div>
-                            <div class="form-group">
-                                <label>Update Interval (seconds)</label>
-                                <input type="number" value="30" min="5" max="300">
-                            </div>
-                            <button class="btn-primary">Save Changes</button>
-                        </div>
+                        <p class="text-center" style="padding: 20px;">Loading settings...</p>
                     </div>
                 </div>
             </div>
@@ -321,8 +366,8 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <script src="assets/js/app.js"></script>
-    <script src="assets/js/charts.js"></script>
     <script src="assets/js/api.js"></script>
+    <script src="assets/js/charts.js"></script>
+    <script src="assets/js/app.js"></script>
 </body>
 </html>
