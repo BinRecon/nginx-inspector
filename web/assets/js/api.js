@@ -3,13 +3,17 @@
    =========================================== */
 
 const API = {
-    baseURL: '/api',
+    // Use localhost with explicit port for development
+    // For production, update this to your API server URL
+    baseURL: window.location.hostname === 'localhost' 
+        ? 'http://localhost:8765/api' 
+        : '/api',
     
     // Get dashboard statistics
     async getDashboardStats() {
         try {
             const response = await axios.get(`${this.baseURL}/stats`);
-            return response.data;
+            return response.data.data;
         } catch (error) {
             console.error('Error fetching dashboard stats:', error);
             return null;
@@ -20,7 +24,7 @@ const API = {
     async getLogAnalysis(params = {}) {
         try {
             const response = await axios.get(`${this.baseURL}/logs/analysis`, { params });
-            return response.data;
+            return response.data.data;
         } catch (error) {
             console.error('Error fetching log analysis:', error);
             return null;
@@ -33,7 +37,7 @@ const API = {
             const response = await axios.get(`${this.baseURL}/logs/top-ips`, { 
                 params: { limit } 
             });
-            return response.data;
+            return response.data.data;
         } catch (error) {
             console.error('Error fetching top IPs:', error);
             return null;
@@ -46,7 +50,7 @@ const API = {
             const response = await axios.get(`${this.baseURL}/logs/top-urls`, { 
                 params: { limit } 
             });
-            return response.data;
+            return response.data.data;
         } catch (error) {
             console.error('Error fetching top URLs:', error);
             return null;
@@ -57,7 +61,7 @@ const API = {
     async getThreats(params = {}) {
         try {
             const response = await axios.get(`${this.baseURL}/security/threats`, { params });
-            return response.data;
+            return response.data.data;
         } catch (error) {
             console.error('Error fetching threats:', error);
             return null;
@@ -68,7 +72,7 @@ const API = {
     async getRealtimeLogs() {
         try {
             const response = await axios.get(`${this.baseURL}/logs/realtime`);
-            return response.data;
+            return response.data.data;
         } catch (error) {
             console.error('Error fetching realtime logs:', error);
             return null;
@@ -76,9 +80,12 @@ const API = {
     },
     
     // Block an IP
-    async blockIp(ip) {
+    async blockIp(ip, apiKey) {
         try {
-            const response = await axios.post(`${this.baseURL}/security/block-ip`, { ip });
+            const response = await axios.post(`${this.baseURL}/security/block-ip`, 
+                { ip },
+                { headers: { 'X-API-Key': apiKey } }
+            );
             return response.data;
         } catch (error) {
             console.error('Error blocking IP:', error);
@@ -87,12 +94,18 @@ const API = {
     },
     
     // Generate report
-    async generateReport(format = 'json') {
+    async generateReport(format = 'json', apiKey = null) {
         try {
-            const response = await axios.get(`${this.baseURL}/reports/generate`, { 
+            const config = {
                 params: { format },
-                responseType: format === 'pdf' ? 'blob' : 'json'
-            });
+                responseType: format === 'csv' ? 'blob' : 'json'
+            };
+            
+            if (apiKey) {
+                config.headers = { 'X-API-Key': apiKey };
+            }
+            
+            const response = await axios.get(`${this.baseURL}/reports/generate`, config);
             return response.data;
         } catch (error) {
             console.error('Error generating report:', error);
@@ -104,7 +117,7 @@ const API = {
     async getSettings() {
         try {
             const response = await axios.get(`${this.baseURL}/settings`);
-            return response.data;
+            return response.data.data;
         } catch (error) {
             console.error('Error fetching settings:', error);
             return null;
@@ -112,13 +125,28 @@ const API = {
     },
     
     // Update settings
-    async updateSettings(settings) {
+    async updateSettings(settings, apiKey) {
         try {
-            const response = await axios.put(`${this.baseURL}/settings`, settings);
+            const response = await axios.put(
+                `${this.baseURL}/settings`, 
+                settings,
+                { headers: { 'X-API-Key': apiKey } }
+            );
             return response.data;
         } catch (error) {
             console.error('Error updating settings:', error);
             return null;
+        }
+    },
+    
+    // Health check
+    async healthCheck() {
+        try {
+            const response = await axios.get(`${this.baseURL}/health`);
+            return response.status === 200;
+        } catch (error) {
+            console.error('API health check failed:', error);
+            return false;
         }
     }
 };
@@ -132,8 +160,11 @@ axios.interceptors.response.use(
     response => response,
     error => {
         if (error.response && error.response.status === 401) {
-            // Handle unauthorized - redirect to login
-            window.location.href = '/login';
+            console.error('Unauthorized access');
+            // Could redirect to login or show auth dialog
+        }
+        if (error.response && error.response.status === 404) {
+            console.error('Resource not found');
         }
         return Promise.reject(error);
     }
@@ -142,6 +173,13 @@ axios.interceptors.response.use(
 // Initialize data loading
 async function initializeDashboard() {
     try {
+        // Check API health first
+        const isHealthy = await API.healthCheck();
+        if (!isHealthy) {
+            console.warn('API server is not responding, using mock data');
+            return;
+        }
+        
         // Load statistics
         const stats = await API.getDashboardStats();
         if (stats) {
@@ -190,7 +228,7 @@ function updateTopIpsTable(ips) {
             <td><span class="ip-badge">${ip.address}</span></td>
             <td><strong>${ip.requests}</strong></td>
             <td><span class="badge ${getBadgeClass(ip.status)}">${ip.status}</span></td>
-            <td>${ip.lastSeen}</td>
+            <td>${new Date(ip.lastSeen).toLocaleTimeString()}</td>
         </tr>
     `).join('');
 }
