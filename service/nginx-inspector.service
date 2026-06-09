@@ -1,0 +1,12 @@
+[Unit]
+Description=Nginx Inspector Monitoring Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/nginx-inspector/nginx-inspector
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target

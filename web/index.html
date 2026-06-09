@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nginx Inspector - Dashboard</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.css" rel="stylesheet">
+    <style>
+        /* Loading and Error States */
+        #pageLoader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(102, 126, 234, 0.3);
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        #errorMessage {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: #f56565;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(245, 101, 101, 0.4);
+            display: none;
+            z-index: 1999;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #667eea;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            z-index: 1998;
+            animation: slideInUp 0.3s ease;
+            transition: all 0.3s ease;
+            opacity: 0;
+        }
+        
+        .toast.show {
+            opacity: 1;
+        }
+        
+        .toast-success {
+            background: #48bb78;
+        }
+        
+        .toast-error {
+            background: #f56565;
+        }
+        
+        .toast-warning {
+            background: #f6ad55;
+        }
+        
+        @keyframes slideInUp {
+            from {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Loading Indicator -->
+        <div id="pageLoader">
+            <div class="spinner"></div>
+        </div>
+        
+        <!-- Error Message -->
+        <div id="errorMessage">
+            <span class="error-text">Error loading data</span>
+        </div>
+
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>Nginx Inspector</span>
+                </div>
+                <button class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-item active" data-page="dashboard">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#logs" class="nav-item" data-page="logs">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Log Analysis</span>
+                </a>
+                <a href="#security" class="nav-item" data-page="security">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Security Threats</span>
+                </a>
+                <a href="#traffic" class="nav-item" data-page="traffic">
+                    <i class="fas fa-globe"></i>
+                    <span>Traffic Analysis</span>
+                </a>
+                <a href="#reports" class="nav-item" data-page="reports">
+                    <i class="fas fa-file-pdf"></i>
+                    <span>Reports</span>
+                </a>
+                <a href="#settings" class="nav-item" data-page="settings">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <div class="topbar">
+                <div class="topbar-left">
+                    <button class="menu-toggle" id="menuToggle">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h1 id="pageTitle">Dashboard</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Search logs, IPs, URLs...">
+                    </div>
+                    <div class="theme-toggle">
+                        <button id="themeToggle" title="Toggle Dark Mode">
+                            <i class="fas fa-moon"></i>
+                        </button>
+                    </div>
+                    <div class="user-profile">
+                        <img src="https://ui-avatars.com/api/?name=Admin&background=667eea&color=fff" alt="User">
+                        <div class="user-menu">
+                            <a href="#profile">Profile</a>
+                            <a href="#settings">Settings</a>
+                            <a href="#logout">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div class="content">
+                <!-- Dashboard Page -->
+                <div class="page active" id="dashboard">
+                    <!-- Statistics Cards -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                <i class="fas fa-eye"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>Total Requests</h3>
+                                <p class="stat-value">--</p>
+                                <span class="stat-change positive">Loading...</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                                <i class="fas fa-exclamation-circle"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>Errors (4xx, 5xx)</h3>
+                                <p class="stat-value">--</p>
+                                <span class="stat-change negative">Loading...</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>Security Alerts</h3>
+                                <p class="stat-value">--</p>
+                                <span class="stat-change negative">Loading...</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                                <i class="fas fa-network-wired"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>Bandwidth Used</h3>
+                                <p class="stat-value">--</p>
+                                <span class="stat-change positive">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Section -->
+                    <div class="charts-section">
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <h2>Requests Over Time</h2>
+                                <select id="timeRange">
+                                    <option value="24h">Last 24 Hours</option>
+                                    <option value="7d">Last 7 Days</option>
+                                    <option value="30d">Last 30 Days</option>
+                                </select>
+                            </div>
+                            <canvas id="requestsChart"></canvas>
+                        </div>
+
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <h2>HTTP Status Codes</h2>
+                            </div>
+                            <canvas id="statusChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Top Data Section -->
+                    <div class="data-section">
+                        <div class="data-container">
+                            <div class="data-header">
+                                <h2>Top IP Addresses</h2>
+                                <button class="btn-secondary">View All</button>
+                            </div>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>IP Address</th>
+                                        <th>Requests</th>
+                                        <th>Status</th>
+                                        <th>Last Seen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="topIpsTable">
+                                    <tr>
+                                        <td colspan="4" class="text-center">Loading...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="data-container">
+                            <div class="data-header">
+                                <h2>Top URLs</h2>
+                                <button class="btn-secondary">View All</button>
+                            </div>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>URL Path</th>
+                                        <th>Requests</th>
+                                        <th>Avg Response Time</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="topUrlsTable">
+                                    <tr>
+                                        <td colspan="4" class="text-center">Loading...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Log Analysis Page -->
+                <div class="page" id="logs">
+                    <div class="page-header">
+                        <h2>Log Analysis</h2>
+                        <button class="btn-primary" id="refreshLogsBtn">Refresh</button>
+                    </div>
+                    <p class="text-center" style="padding: 20px;">Loading log analysis...</p>
+                </div>
+
+                <!-- Security Threats Page -->
+                <div class="page" id="security">
+                    <div class="page-header">
+                        <h2>Security Threats Detection</h2>
+                        <button class="btn-primary" id="refreshSecurityBtn">Scan Now</button>
+                    </div>
+
+                    <div class="alerts-section">
+                        <p class="text-center" style="padding: 20px;">Loading threats...</p>
+                    </div>
+                </div>
+
+                <!-- Traffic Analysis Page -->
+                <div class="page" id="traffic">
+                    <div class="page-header">
+                        <h2>Traffic Analysis</h2>
+                        <button class="btn-primary" id="refreshTrafficBtn">Refresh</button>
+                    </div>
+                    <p class="text-center" style="padding: 20px;">Loading traffic data...</p>
+                </div>
+
+                <!-- Reports Page -->
+                <div class="page" id="reports">
+                    <div class="page-header">
+                        <h2>Reports</h2>
+                    </div>
+                    <p class="text-center" style="padding: 20px;">Loading reports...</p>
+                </div>
+
+                <!-- Settings Page -->
+                <div class="page" id="settings">
+                    <div class="page-header">
+                        <h2>Settings</h2>
+                    </div>
+
+                    <div class="settings-form">
+                        <p class="text-center" style="padding: 20px;">Loading settings...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/charts.js"></script>
+    <script src="assets/js/app.js"></script>
+</body>
+</html>

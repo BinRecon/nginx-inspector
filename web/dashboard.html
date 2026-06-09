@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Nginx Inspector Dashboard</title>
+</head>
+
+<body>
+
+    <h2>Nginx Inspector Dashboard</h2>
+    <button onclick="load()">Load Report</button>
+    <pre id="output"></pre>
+
+    <script>
+        function load() {
+            fetch("http://localhost:8765/report")
+                .then(res => res.text())
+                .then(data => document.getElementById("output").innerText = data)
+        }
+    </script>
+
+</body>
+
+</html>
