@@ -681,7 +681,8 @@ def index():
 # Main Entry Point
 # ============================================
 if __name__ == '__main__':
-    port = int(os.getenv("PORT", 8765))
+    # Use API_PORT if available, fallback to PORT, then default to 8765
+    port = int(os.getenv("API_PORT", os.getenv("PORT", 8765)))
     host = os.getenv("HOST", "0.0.0.0")
     
     print(f"Starting Nginx Inspector API on {host}:{port}")
