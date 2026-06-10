@@ -20,6 +20,8 @@ SHELL_ANALYZER="$INSTALL_DIR/bin/nginx-inspector.sh"
 ATTACK_DETECTOR="$INSTALL_DIR/bin/attack-detector.sh"
 WEB_DASHBOARD="$INSTALL_DIR/web/index.html"
 ENV_FILE="$INSTALL_DIR/.env"
+SERVICE_FILE="/etc/systemd/system/nginx-inspector.service"
+SYMLINK="/usr/local/bin/nginx-inspector"
 
 # Error handler
 error_exit() {
@@ -62,6 +64,7 @@ ${GREEN}Commands:${NC}
   attack <logfile>              Run security threat detection
   api                           Start REST API server (port 8765)
   web                           Open web dashboard
+  uninstall                     Uninstall nginx-inspector completely
   version, --version, -v        Show version information
   help, --help, -h              Show this help message
 
@@ -70,9 +73,10 @@ ${GREEN}Examples:${NC}
   nginx-inspector analyze /var/log/nginx/access.log
   nginx-inspector attack /var/log/nginx/access.log
   nginx-inspector api
+  nginx-inspector uninstall
 
 ${GREEN}Documentation:${NC}
-  https://github.com/shuvo-halder/nginx-inspector
+  https://github.com/BinRecon/nginx-inspector
 
 EOF
 }
@@ -92,6 +96,186 @@ verify_installation() {
 check_service() {
     if ! command -v systemctl &> /dev/null; then
         error_exit "systemctl not found. This system may not use systemd."
+    fi
+}
+
+# Function to uninstall
+uninstall_app() {
+    # Check if running with sudo
+    if [ "$EUID" -ne 0 ]; then
+        error_exit "Uninstallation must be run with sudo"
+    fi
+
+    echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║   Nginx Inspector Uninstallation     ║${NC}"
+    echo -e "${CYAN}║    Version: 1.0.0                     ║${NC}"
+    echo -e "${CYAN}╚════════════════════════════════════════╝${NC}"
+    echo ""
+
+    # Confirmation prompt
+    echo -e "${YELLOW}⚠ WARNING: This will remove all Nginx Inspector files!${NC}"
+    echo ""
+    echo "This action will:"
+    echo "  • Stop the nginx-inspector service"
+    echo "  • Remove $INSTALL_DIR directory"
+    echo "  • Remove $SYMLINK symlink"
+    echo "  • Remove $SERVICE_FILE"
+    echo "  • Remove Python virtual environment"
+    echo ""
+    read -p "Are you sure you want to continue? (yes/no): " confirmation
+
+    if [ "$confirmation" != "yes" ]; then
+        echo -e "${YELLOW}Uninstallation cancelled${NC}"
+        exit 0
+    fi
+
+    echo ""
+
+    # Step 1: Stop the service if running
+    info_msg "Stopping nginx-inspector service..."
+
+    if check_service &> /dev/null; then
+        if systemctl is-active --quiet nginx-inspector 2>/dev/null; then
+            systemctl stop nginx-inspector 2>/dev/null || warning_msg "Failed to stop service (may already be stopped)"
+            success_msg "Service stopped"
+        else
+            warning_msg "Service is not running"
+        fi
+    fi
+
+    echo ""
+
+    # Step 2: Disable the service
+    info_msg "Disabling nginx-inspector service..."
+
+    if [ -f "$SERVICE_FILE" ]; then
+        if systemctl is-enabled --quiet nginx-inspector 2>/dev/null; then
+            systemctl disable nginx-inspector > /dev/null 2>&1 || warning_msg "Failed to disable service"
+            success_msg "Service disabled"
+        else
+            warning_msg "Service is not enabled"
+        fi
+    fi
+
+    echo ""
+
+    # Step 3: Reload systemd daemon
+    info_msg "Reloading systemd daemon..."
+
+    if command -v systemctl &> /dev/null; then
+        systemctl daemon-reload 2>/dev/null || warning_msg "Failed to reload systemd"
+        success_msg "Systemd daemon reloaded"
+    fi
+
+    echo ""
+
+    # Step 4: Remove systemd service file
+    info_msg "Removing systemd service file..."
+
+    if [ -f "$SERVICE_FILE" ]; then
+        rm -f "$SERVICE_FILE" || error_exit "Failed to remove service file"
+        success_msg "Service file removed: $SERVICE_FILE"
+    else
+        warning_msg "Service file not found: $SERVICE_FILE"
+    fi
+
+    echo ""
+
+    # Step 5: Remove symlink
+    info_msg "Removing command-line symlink..."
+
+    if [ -L "$SYMLINK" ]; then
+        rm -f "$SYMLINK" || error_exit "Failed to remove symlink"
+        success_msg "Symlink removed: $SYMLINK"
+    else
+        warning_msg "Symlink not found: $SYMLINK"
+    fi
+
+    echo ""
+
+    # Step 6: Remove installation directory
+    info_msg "Removing installation directory..."
+
+    if [ -d "$INSTALL_DIR" ]; then
+        rm -rf "$INSTALL_DIR" || error_exit "Failed to remove installation directory"
+        success_msg "Installation directory removed: $INSTALL_DIR"
+    else
+        warning_msg "Installation directory not found: $INSTALL_DIR"
+    fi
+
+    echo ""
+
+    # Step 7: Clean up cache
+    info_msg "Cleaning up temporary files..."
+
+    if [ -d "$HOME/.cache" ]; then
+        find "$HOME/.cache" -name "*nginx-inspector*" -type d -exec rm -rf {} + 2>/dev/null || true
+        success_msg "Cache cleaned"
+    fi
+
+    echo ""
+
+    # Step 8: Kill any leftover processes
+    info_msg "Checking for leftover processes..."
+
+    if pgrep -f nginx-inspector > /dev/null; then
+        warning_msg "Some nginx-inspector processes are still running"
+        echo "Attempting to kill processes..."
+        pkill -f nginx-inspector || warning_msg "Failed to kill processes"
+        success_msg "Processes terminated"
+    else
+        success_msg "No leftover processes found"
+    fi
+
+    echo ""
+
+    # Step 9: Verification
+    info_msg "Verifying uninstallation..."
+
+    errors_found=0
+
+    if [ -d "$INSTALL_DIR" ]; then
+        warning_msg "Installation directory still exists: $INSTALL_DIR"
+        errors_found=$((errors_found + 1))
+    else
+        success_msg "Installation directory removed ✓"
+    fi
+
+    if [ -L "$SYMLINK" ]; then
+        warning_msg "Symlink still exists: $SYMLINK"
+        errors_found=$((errors_found + 1))
+    else
+        success_msg "Symlink removed ✓"
+    fi
+
+    if [ -f "$SERVICE_FILE" ]; then
+        warning_msg "Service file still exists: $SERVICE_FILE"
+        errors_found=$((errors_found + 1))
+    else
+        success_msg "Service file removed ✓"
+    fi
+
+    echo ""
+
+    # Final message
+    if [ $errors_found -eq 0 ]; then
+        echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║   Uninstallation Complete! ✓          ║${NC}"
+        echo -e "${CYAN}╚════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${GREEN}Nginx Inspector has been completely removed${NC}"
+        echo ""
+        echo "Optional cleanup:"
+        echo "  • Python packages: pip uninstall flask flask-cors python-dotenv"
+        echo "  • Nginx logs: sudo rm /var/log/nginx/access.log*"
+        echo ""
+    else
+        echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║   Uninstallation Complete (with warnings) ║${NC}"
+        echo -e "${CYAN}╚════════════════════════════════════════╝${NC}"
+        echo ""
+        warning_msg "Some files could not be removed. See above for details."
+        echo ""
     fi
 }
 
@@ -226,6 +410,10 @@ case "$1" in
             warning_msg "Could not open browser automatically"
             echo -e "${CYAN}Open manually:${NC} file://$WEB_DASHBOARD"
         fi
+        ;;
+    
+    uninstall)
+        uninstall_app
         ;;
     
     version|--version|-v)
