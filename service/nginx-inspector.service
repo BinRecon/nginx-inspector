@@ -4,9 +4,14 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/nginx-inspector/nginx-inspector
-Restart=always
+ExecStart=/usr/local/nginx-inspector/bin/nginx-inspector
+WorkingDirectory=/usr/local/nginx-inspector
 User=root
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nginx-inspector
+Restart=always
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
