@@ -29,7 +29,7 @@ CORS(app, resources={
 # Configuration
 # ============================================
 DEFAULT_LOG_FILE = "/var/log/nginx/access.log"
-API_KEY = os.getenv("NGINX_INSPECTOR_API_KEY", "default-key-change-this")
+API_KEY = os.getenv("NGINX_INSPECTOR_API_KEY", "13ae94ca78b25625c5457ce5e0fa8bcbb709eba1f53eb5be81986010edb4fa8c")
 DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
 
 # ============================================

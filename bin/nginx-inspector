@@ -76,7 +76,7 @@ ${GREEN}Examples:${NC}
   nginx-inspector uninstall
 
 ${GREEN}Documentation:${NC}
-  https://github.com/BinRecon/nginx-inspector
+  https://github.com/shuvo-halder/nginx-inspector
 
 EOF
 }
