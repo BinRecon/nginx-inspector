@@ -4,12 +4,13 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/nginx-inspector/bin/nginx-inspector
+ExecStart=/usr/local/bin/nginx-inspector start
 WorkingDirectory=/usr/local/nginx-inspector
 User=root
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=nginx-inspector
+EnvironmentFile=/usr/local/nginx-inspector/.env
 Restart=always
 RestartSec=10
 
