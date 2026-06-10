@@ -200,8 +200,8 @@ if [ -f "$SCRIPT_DIR/service/nginx-inspector.service" ]; then
     # Update paths in service file
     sed -i "s|/usr/local/nginx-inspector|$INSTALL_DIR|g" "/etc/systemd/system/nginx-inspector.service"
     
-    # FIX: Update ExecStart path to point to bin/nginx-inspector
-    sed -i "s|ExecStart=\(.*\)/nginx-inspector|ExecStart=\1/bin/nginx-inspector|g" "/etc/systemd/system/nginx-inspector.service"
+    # Fix: Update ExecStart to use global symlink with 'start' command
+    sed -i "s|ExecStart=.*|ExecStart=/usr/local/bin/nginx-inspector start|g" "/etc/systemd/system/nginx-inspector.service"
     
     # Add EnvironmentFile to load .env variables
     if ! grep -q "EnvironmentFile=" "/etc/systemd/system/nginx-inspector.service"; then
