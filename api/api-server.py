@@ -11,6 +11,19 @@ import json
 import os
 from datetime import datetime, timedelta
 import re
+import logging
+import sys
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('/var/log/nginx-inspector.log', mode='a') if os.path.exists('/var') else logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -21,16 +34,27 @@ CORS(app, resources={
     r"/api/*": {
         "origins": ["*"],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
+        "allow_headers": ["Content-Type", "Authorization", "X-API-Key"]
+    },
+    r"/web/*": {
+        "origins": ["*"],
+        "methods": ["GET"],
+        "allow_headers": ["Content-Type"]
     }
 })
 
 # ============================================
 # Configuration
 # ============================================
-DEFAULT_LOG_FILE = "/var/log/nginx/access.log"
+DEFAULT_LOG_FILE = os.getenv("DEFAULT_LOG_FILE", "/var/log/nginx/access.log")
 API_KEY = os.getenv("NGINX_INSPECTOR_API_KEY", "13ae94ca78b25625c5457ce5e0fa8bcbb709eba1f53eb5be81986010edb4fa8c")
 DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
+HOST = os.getenv("HOST", "0.0.0.0")
+API_PORT = int(os.getenv("API_PORT", 8765))
+
+logger.info(f"Nginx Inspector API starting on {HOST}:{API_PORT}")
+logger.info(f"Default log file: {DEFAULT_LOG_FILE}")
+logger.info(f"Debug mode: {DEBUG_MODE}")
 
 # ============================================
 # Error Handling Classes
@@ -63,6 +87,7 @@ class NotFoundError(APIError):
 @app.errorhandler(APIError)
 def handle_api_error(error):
     """Handle API errors"""
+    logger.warning(f"API Error: {error.message}")
     response = {
         "error": True,
         "message": error.message,
@@ -73,6 +98,7 @@ def handle_api_error(error):
 @app.errorhandler(Exception)
 def handle_generic_error(error):
     """Handle generic errors"""
+    logger.error(f"Generic Error: {str(error)}", exc_info=True)
     if DEBUG_MODE:
         message = str(error)
     else:
@@ -94,8 +120,10 @@ def require_api_key(f):
     def decorated_function(*args, **kwargs):
         api_key = request.headers.get('X-API-Key')
         if not api_key:
+            logger.warning("API request without X-API-Key header")
             raise AuthenticationError("API key required in X-API-Key header")
         if api_key != API_KEY:
+            logger.warning(f"Invalid API key attempt: {api_key[:10]}...")
             raise AuthenticationError("Invalid API key")
         return f(*args, **kwargs)
     return decorated_function
@@ -106,12 +134,19 @@ def validate_log_file(log_file):
         log_file = DEFAULT_LOG_FILE
     
     # Security: Prevent path traversal
-    if ".." in log_file or log_file.startswith("/"):
-        if log_file != DEFAULT_LOG_FILE and not log_file.startswith("/var/log/nginx/"):
-            raise ValidationError("Invalid log file path")
+    if ".." in log_file:
+        raise ValidationError("Invalid log file path: path traversal detected")
+    
+    # Allow absolute paths only in /var/log/nginx/ or use DEFAULT_LOG_FILE
+    if log_file.startswith("/"):
+        if not (log_file.startswith("/var/log/nginx/") or log_file == DEFAULT_LOG_FILE):
+            raise ValidationError("Invalid log file path: only /var/log/nginx/ paths allowed")
     
     if not os.path.exists(log_file):
         raise NotFoundError(f"Log file not found: {log_file}")
+    
+    if not os.access(log_file, os.R_OK):
+        raise APIError(f"Permission denied reading log file: {log_file}", 403)
     
     return log_file
 
@@ -126,11 +161,14 @@ def safe_subprocess_call(command):
             shell=False
         )
         if result.returncode != 0:
+            logger.error(f"Command failed: {result.stderr}")
             raise APIError(f"Command failed: {result.stderr}", 500)
         return result.stdout
     except subprocess.TimeoutExpired:
+        logger.error("Command execution timeout")
         raise APIError("Command execution timeout", 504)
     except Exception as e:
+        logger.error(f"Command execution failed: {str(e)}")
         raise APIError(f"Command execution failed: {str(e)}", 500)
 
 # ============================================
@@ -178,6 +216,7 @@ def parse_nginx_log(log_file):
         stats["unique_ips"] = len(stats["unique_ips"])
         return stats
     except Exception as e:
+        logger.error(f"Error parsing log file: {str(e)}")
         raise APIError(f"Error parsing log file: {str(e)}", 500)
 
 # ============================================
@@ -190,7 +229,8 @@ def health_check():
     return jsonify({
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "service": "nginx-inspector-api"
+        "service": "nginx-inspector-api",
+        "version": "1.0.0"
     }), 200
 
 @app.route('/api/stats', methods=['GET'])
@@ -222,10 +262,12 @@ def get_stats():
             },
             "timestamp": datetime.now().isoformat()
         }
+        logger.info(f"Stats retrieved: {stats['total_requests']} requests")
         return jsonify(response), 200
     except APIError as e:
         raise e
     except Exception as e:
+        logger.error(f"Error in get_stats: {str(e)}")
         raise APIError(str(e), 500)
 
 @app.route('/api/logs/analysis', methods=['GET'])
@@ -258,10 +300,12 @@ def get_log_analysis():
             },
             "timestamp": datetime.now().isoformat()
         }
+        logger.info(f"Log analysis completed: {len(stats['urls'])} unique URLs")
         return jsonify(response), 200
     except APIError as e:
         raise e
     except Exception as e:
+        logger.error(f"Error in get_log_analysis: {str(e)}")
         raise APIError(str(e), 500)
 
 @app.route('/api/logs/top-ips', methods=['GET'])
@@ -317,10 +361,12 @@ def get_top_ips():
             "data": result,
             "timestamp": datetime.now().isoformat()
         }
+        logger.info(f"Top IPs retrieved: {len(result)} IPs")
         return jsonify(response), 200
     except APIError as e:
         raise e
     except Exception as e:
+        logger.error(f"Error in get_top_ips: {str(e)}")
         raise APIError(str(e), 500)
 
 @app.route('/api/logs/top-urls', methods=['GET'])
@@ -369,10 +415,12 @@ def get_top_urls():
             "data": result,
             "timestamp": datetime.now().isoformat()
         }
+        logger.info(f"Top URLs retrieved: {len(result)} URLs")
         return jsonify(response), 200
     except APIError as e:
         raise e
     except Exception as e:
+        logger.error(f"Error in get_top_urls: {str(e)}")
         raise APIError(str(e), 500)
 
 @app.route('/api/logs/realtime', methods=['GET'])
@@ -407,10 +455,12 @@ def get_realtime_logs():
             "count": len(recent_lines),
             "timestamp": datetime.now().isoformat()
         }
+        logger.info(f"Real-time logs retrieved: {len(recent_lines)} lines")
         return jsonify(response), 200
     except APIError as e:
         raise e
     except Exception as e:
+        logger.error(f"Error in get_realtime_logs: {str(e)}")
         raise APIError(str(e), 500)
 
 @app.route('/api/security/threats', methods=['GET'])
@@ -459,8 +509,10 @@ def get_security_threats():
                                     "timestamp": datetime.now().isoformat(),
                                     "logLine": line.strip()[:200]
                                 })
+                                logger.warning(f"Threat detected: {threat_name} from {ip}")
                                 break
         except Exception as e:
+            logger.error(f"Error analyzing threats: {str(e)}")
             raise APIError(f"Error analyzing threats: {str(e)}", 500)
         
         response = {
@@ -473,6 +525,7 @@ def get_security_threats():
     except APIError as e:
         raise e
     except Exception as e:
+        logger.error(f"Error in get_security_threats: {str(e)}")
         raise APIError(str(e), 500)
 
 @app.route('/api/security/block-ip', methods=['POST'])
@@ -500,6 +553,8 @@ def block_ip():
         if not re.match(ip_pattern, ip):
             raise ValidationError("Invalid IP address format")
         
+        logger.info(f"IP {ip} blocked via API")
+        
         response = {
             "error": False,
             "message": f"IP {ip} has been blocked",
@@ -511,6 +566,7 @@ def block_ip():
     except APIError as e:
         raise e
     except Exception as e:
+        logger.error(f"Error in block_ip: {str(e)}")
         raise APIError(str(e), 500)
 
 @app.route('/api/reports/generate', methods=['GET'])
@@ -547,6 +603,7 @@ def generate_report():
                     "statusCodeDistribution": stats["status_codes"]
                 }
             }
+            logger.info(f"JSON report generated")
             return jsonify(report), 200
         
         elif report_format == 'csv':
@@ -556,6 +613,7 @@ def generate_report():
             csv_content += f"4xx Errors,{stats['errors_4xx']}\n"
             csv_content += f"5xx Errors,{stats['errors_5xx']}\n"
             
+            logger.info(f"CSV report generated")
             return csv_content, 200, {'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="nginx_report.csv"'}
         
         elif report_format == 'html':
@@ -574,11 +632,13 @@ def generate_report():
                 </body>
             </html>
             """
+            logger.info(f"HTML report generated")
             return html_content, 200, {'Content-Type': 'text/html'}
     
     except APIError as e:
         raise e
     except Exception as e:
+        logger.error(f"Error in generate_report: {str(e)}")
         raise APIError(str(e), 500)
 
 @app.route('/api/settings', methods=['GET'])
@@ -593,13 +653,16 @@ def get_settings():
             "data": {
                 "logFilePath": DEFAULT_LOG_FILE,
                 "updateInterval": 30,
-                "apiKey": "***" if API_KEY != "default-key-change-this" else "NOT SET",
-                "debugMode": DEBUG_MODE
+                "apiKey": "SET" if API_KEY != "default-key-change-this" else "NOT SET",
+                "debugMode": DEBUG_MODE,
+                "host": HOST,
+                "port": API_PORT
             },
             "timestamp": datetime.now().isoformat()
         }
         return jsonify(response), 200
     except Exception as e:
+        logger.error(f"Error in get_settings: {str(e)}")
         raise APIError(str(e), 500)
 
 @app.route('/api/settings', methods=['PUT'])
@@ -631,6 +694,8 @@ def update_settings():
             if not isinstance(interval, int) or interval < 5 or interval > 300:
                 raise ValidationError("Update interval must be between 5 and 300 seconds")
         
+        logger.info(f"Settings updated: {data}")
+        
         response = {
             "error": False,
             "message": "Settings updated successfully",
@@ -641,6 +706,7 @@ def update_settings():
     except APIError as e:
         raise e
     except Exception as e:
+        logger.error(f"Error in update_settings: {str(e)}")
         raise APIError(str(e), 500)
 
 # ============================================
@@ -681,12 +747,16 @@ def index():
 # Main Entry Point
 # ============================================
 if __name__ == '__main__':
-    # Use API_PORT if available, fallback to PORT, then default to 8765
-    port = int(os.getenv("API_PORT", os.getenv("PORT", 8765)))
-    host = os.getenv("HOST", "0.0.0.0")
-    
-    print(f"Starting Nginx Inspector API on {host}:{port}")
-    print(f"Debug Mode: {DEBUG_MODE}")
-    print(f"API Key Configuration: {'SET' if API_KEY != 'default-key-change-this' else 'DEFAULT (CHANGE THIS!)'}")
-    
-    app.run(host=host, port=port, debug=DEBUG_MODE)
+    try:
+        logger.info(f"Nginx Inspector API v1.0.0 starting...")
+        logger.info(f"API Key configured: {'Yes' if API_KEY != 'default-key-change-this' else 'No (DEFAULT)'}")
+        logger.info(f"Default log file: {DEFAULT_LOG_FILE}")
+        
+        # Check if log file exists
+        if not os.path.exists(DEFAULT_LOG_FILE):
+            logger.warning(f"Default log file not found: {DEFAULT_LOG_FILE}")
+        
+        app.run(host=HOST, port=API_PORT, debug=DEBUG_MODE, threaded=True)
+    except Exception as e:
+        logger.error(f"Failed to start API server: {str(e)}", exc_info=True)
+        sys.exit(1)
