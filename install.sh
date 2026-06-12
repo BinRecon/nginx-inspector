@@ -66,7 +66,7 @@ if ! command -v pip3 &> /dev/null; then
     success_msg "pip3 installed"
 fi
 
-if ! command -v python3 -m venv &> /dev/null; then
+if ! python3 -m venv --help &> /dev/null; then
     warning_msg "python3-venv not found. Installing..."
     apt-get install -y python3-venv > /dev/null || error_exit "Failed to install python3-venv"
     success_msg "python3-venv installed"
@@ -97,6 +97,7 @@ fi
 cp -r "$SCRIPT_DIR/bin" "$INSTALL_DIR/" || error_exit "Failed to copy bin directory"
 cp -r "$SCRIPT_DIR/api" "$INSTALL_DIR/" || error_exit "Failed to copy api directory"
 cp -r "$SCRIPT_DIR/web" "$INSTALL_DIR/" || error_exit "Failed to copy web directory"
+cp -r "$SCRIPT_DIR/service" "$INSTALL_DIR/" 2>/dev/null || warning_msg "Service directory not found"
 
 if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
     cp "$SCRIPT_DIR/requirements.txt" "$INSTALL_DIR/" || error_exit "Failed to copy requirements.txt"
@@ -148,7 +149,7 @@ info_msg "Setting up permissions..."
 chmod 755 "$INSTALL_DIR" || error_exit "Failed to set directory permissions"
 chmod +x "$INSTALL_DIR/bin/nginx-inspector" || error_exit "Failed to set nginx-inspector permissions"
 chmod +x "$INSTALL_DIR/bin"/*.sh 2>/dev/null || true
-chmod 644 "$INSTALL_DIR/.env" || warning_msg "Could not set .env permissions"
+chmod 600 "$INSTALL_DIR/.env" || warning_msg "Could not set .env permissions (required for security)"
 
 success_msg "Permissions set correctly"
 echo ""
@@ -183,7 +184,7 @@ if [ ! -f "$INSTALL_DIR/requirements.txt" ]; then
     error_exit "requirements.txt not found at $INSTALL_DIR/requirements.txt"
 fi
 
-"$VENV_DIR/bin/pip" install --upgrade pip setuptools wheel > /dev/null 2>&1
+"$VENV_DIR/bin/pip" install --upgrade pip setuptools wheel > /dev/null 2>&1 || warning_msg "Failed to upgrade pip"
 if "$VENV_DIR/bin/pip" install -r "$INSTALL_DIR/requirements.txt" > /dev/null 2>&1; then
     success_msg "Python dependencies installed successfully"
 else
@@ -194,19 +195,11 @@ echo ""
 # Step 9: Setup systemd service
 info_msg "Setting up systemd service..."
 
-if [ -f "$SCRIPT_DIR/service/nginx-inspector.service" ]; then
-    cp "$SCRIPT_DIR/service/nginx-inspector.service" "/etc/systemd/system/" || error_exit "Failed to copy service file"
+if [ -f "$INSTALL_DIR/service/nginx-inspector.service" ]; then
+    cp "$INSTALL_DIR/service/nginx-inspector.service" "/etc/systemd/system/" || error_exit "Failed to copy service file"
     
     # Update paths in service file
     sed -i "s|/usr/local/nginx-inspector|$INSTALL_DIR|g" "/etc/systemd/system/nginx-inspector.service"
-    
-    # Fix: Update ExecStart to use global symlink with 'start' command
-    sed -i "s|ExecStart=.*|ExecStart=/usr/local/bin/nginx-inspector start|g" "/etc/systemd/system/nginx-inspector.service"
-    
-    # Add EnvironmentFile to load .env variables
-    if ! grep -q "EnvironmentFile=" "/etc/systemd/system/nginx-inspector.service"; then
-        sed -i "/\[Service\]/a EnvironmentFile=$INSTALL_DIR/.env" "/etc/systemd/system/nginx-inspector.service"
-    fi
     
     systemctl daemon-reload || error_exit "Failed to reload systemd daemon"
     systemctl enable nginx-inspector > /dev/null 2>&1 || error_exit "Failed to enable service"
@@ -255,24 +248,27 @@ echo ""
 echo -e "   ${CYAN}2. Start service:${NC}"
 echo "      sudo systemctl start nginx-inspector"
 echo ""
-echo -e "   ${CYAN}3. Check status:${NC}"
+echo -e "   ${CYAN}3. Enable on boot (optional):${NC}"
+echo "      sudo systemctl enable nginx-inspector"
+echo ""
+echo -e "   ${CYAN}4. Check status:${NC}"
 echo "      sudo systemctl status nginx-inspector"
 echo ""
-echo -e "   ${CYAN}4. View logs:${NC}"
+echo -e "   ${CYAN}5. View logs:${NC}"
 echo "      sudo journalctl -u nginx-inspector -f"
 echo ""
-echo -e "   ${CYAN}5. Access Web Dashboard:${NC}"
+echo -e "   ${CYAN}6. Access Web Dashboard:${NC}"
 echo "      http://localhost:8080"
 echo ""
-echo -e "   ${CYAN}6. Access API:${NC}"
-echo "      http://localhost:8765/api"
+echo -e "   ${CYAN}7. Test API:${NC}"
+echo "      curl http://localhost:8765/api/health"
 echo ""
 echo -e "${GREEN}📚 For more information:${NC}"
 echo "   https://github.com/shuvo-halder/nginx-inspector"
 echo ""
 echo -e "${YELLOW}⚠ Important Configuration:${NC}"
 echo "   - Edit .env file: sudo nano $INSTALL_DIR/.env"
-echo "   - Change API_KEY for production"
+echo "   - Change NGINX_INSPECTOR_API_KEY for production"
 echo "   - Adjust API_PORT and WEB_PORT as needed"
 echo "   - Check logs: sudo journalctl -u nginx-inspector -f"
 echo "   - Restart after config changes: sudo systemctl restart nginx-inspector"
