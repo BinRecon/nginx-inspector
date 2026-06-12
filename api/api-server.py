@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import re
 import logging
 import sys
+import secrets
 
 # Setup logging
 logging.basicConfig(
@@ -47,14 +48,26 @@ CORS(app, resources={
 # Configuration
 # ============================================
 DEFAULT_LOG_FILE = os.getenv("DEFAULT_LOG_FILE", "/var/log/nginx/access.log")
-API_KEY = os.getenv("NGINX_INSPECTOR_API_KEY", "13ae94ca78b25625c5457ce5e0fa8bcbb709eba1f53eb5be81986010edb4fa8c")
+
+# FIX #1: Use secure API key generation or require explicit configuration
+DEFAULT_API_KEY = os.getenv("NGINX_INSPECTOR_API_KEY")
+if not DEFAULT_API_KEY:
+    logger.error("CRITICAL: NGINX_INSPECTOR_API_KEY not set in environment. Please set it before starting the application.")
+    logger.error("Generate a new key with: python3 -c \"import secrets; print(secrets.token_hex(32))\"")
+    DEFAULT_API_KEY = None  # Force user to set it
+
+API_KEY = DEFAULT_API_KEY
 DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
-HOST = os.getenv("HOST", "0.0.0.0")
+HOST = os.getenv("HOST", "127.0.0.1")  # Changed from 0.0.0.0 to localhost by default
 API_PORT = int(os.getenv("API_PORT", 8765))
 
 logger.info(f"Nginx Inspector API starting on {HOST}:{API_PORT}")
 logger.info(f"Default log file: {DEFAULT_LOG_FILE}")
 logger.info(f"Debug mode: {DEBUG_MODE}")
+
+if not API_KEY:
+    logger.error("FATAL: API key is not configured. Exiting.")
+    sys.exit(1)
 
 # ============================================
 # Error Handling Classes
@@ -122,7 +135,9 @@ def require_api_key(f):
         if not api_key:
             logger.warning("API request without X-API-Key header")
             raise AuthenticationError("API key required in X-API-Key header")
-        if api_key != API_KEY:
+        
+        # Use constant-time comparison to prevent timing attacks
+        if not secrets.compare_digest(api_key, API_KEY):
             logger.warning(f"Invalid API key attempt: {api_key[:10]}...")
             raise AuthenticationError("Invalid API key")
         return f(*args, **kwargs)
@@ -653,7 +668,7 @@ def get_settings():
             "data": {
                 "logFilePath": DEFAULT_LOG_FILE,
                 "updateInterval": 30,
-                "apiKey": "SET" if API_KEY != "default-key-change-this" else "NOT SET",
+                "apiKey": "SET" if API_KEY else "NOT SET",
                 "debugMode": DEBUG_MODE,
                 "host": HOST,
                 "port": API_PORT
@@ -749,7 +764,7 @@ def index():
 if __name__ == '__main__':
     try:
         logger.info(f"Nginx Inspector API v1.0.0 starting...")
-        logger.info(f"API Key configured: {'Yes' if API_KEY != 'default-key-change-this' else 'No (DEFAULT)'}")
+        logger.info(f"API Key configured: {'Yes' if API_KEY else 'No (MISSING - REQUIRED)'}")
         logger.info(f"Default log file: {DEFAULT_LOG_FILE}")
         
         # Check if log file exists
