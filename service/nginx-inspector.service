@@ -4,15 +4,17 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/nginx-inspector start
-WorkingDirectory=/usr/local/nginx-inspector
 User=root
+WorkingDirectory=/usr/local/nginx-inspector
+EnvironmentFile=/usr/local/nginx-inspector/.env
+ExecStart=/usr/local/nginx-inspector/venv/bin/python /usr/local/nginx-inspector/api/api-server.py
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStop=/bin/kill -TERM $MAINPID
+Restart=always
+RestartSec=10
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=nginx-inspector
-EnvironmentFile=/usr/local/nginx-inspector/.env
-Restart=always
-RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
