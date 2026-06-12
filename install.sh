@@ -2,6 +2,7 @@
 
 # Nginx Inspector Installation Script
 # This script installs nginx-inspector and all its dependencies
+# Security: Generates secure API key automatically during installation
 
 # Color codes
 RED='\033[0;31m'
@@ -106,8 +107,26 @@ fi
 success_msg "Application files copied"
 echo ""
 
-# Step 4: Setup .env file
+# Step 4: Setup .env file with secure API key generation
 info_msg "Setting up .env configuration file..."
+
+# Generate secure API key
+info_msg "Generating secure API key..."
+if command -v python3 &> /dev/null; then
+    GENERATED_API_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))" 2>/dev/null)
+    if [ -z "$GENERATED_API_KEY" ]; then
+        # Fallback if secrets module not available
+        GENERATED_API_KEY=$(python3 -c "import os; print(os.urandom(32).hex())" 2>/dev/null)
+    fi
+    if [ -z "$GENERATED_API_KEY" ]; then
+        # Last resort fallback
+        GENERATED_API_KEY=$(openssl rand -hex 32)
+    fi
+    success_msg "Secure API key generated"
+else
+    GENERATED_API_KEY=$(openssl rand -hex 32)
+    success_msg "Secure API key generated using OpenSSL"
+fi
 
 if [ ! -f "$INSTALL_DIR/.env" ]; then
     if [ -f "$SCRIPT_DIR/.env.example" ]; then
@@ -117,29 +136,40 @@ if [ ! -f "$INSTALL_DIR/.env" ]; then
         warning_msg ".env.example not found, creating default .env"
         cat > "$INSTALL_DIR/.env" << 'EOF'
 # Nginx Inspector API Configuration
-# Copy this file to .env and update values as needed
+# =====================================
+# See .env.example for detailed documentation
 
 # API Server Settings
-HOST=0.0.0.0
+HOST=127.0.0.1
 API_PORT=8765
 DEBUG=False
 
 # Web Dashboard Settings
 WEB_PORT=8080
 
-# API Key (CHANGE THIS IN PRODUCTION!)
-NGINX_INSPECTOR_API_KEY=13ae94ca78b25625c5457ce5e0fa8bcbb709eba1f53eb5be81986010edb4fa8c
+# API Key - GENERATED SECURELY
+NGINX_INSPECTOR_API_KEY=PLACEHOLDER_API_KEY
 
 # Nginx Log File Path
 DEFAULT_LOG_FILE=/var/log/nginx/access.log
 
 # CORS Settings
-CORS_ORIGINS=*
+CORS_ORIGINS=http://localhost:8080
 EOF
         success_msg "Default .env file created"
     fi
+    
+    # Replace API key placeholder with generated key
+    if [ -n "$GENERATED_API_KEY" ]; then
+        sed -i "s|PLACEHOLDER_API_KEY|$GENERATED_API_KEY|g" "$INSTALL_DIR/.env"
+        sed -i "s|your-secure-api-key-here|$GENERATED_API_KEY|g" "$INSTALL_DIR/.env"
+        success_msg "API key configured in .env"
+    fi
 else
     warning_msg ".env file already exists, skipping..."
+    info_msg "To generate a new API key, run:"
+    echo "   python3 -c \"import secrets; print(secrets.token_hex(32))\""
+    echo "   Then update NGINX_INSPECTOR_API_KEY in: $INSTALL_DIR/.env"
 fi
 echo ""
 
@@ -233,17 +263,23 @@ success_msg "Installation verified successfully"
 echo ""
 
 # Step 11: Display installation summary
-echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║    Installation Complete! ✓           ║${NC}"
-echo -e "${CYAN}╚════════════════════════════════════════╝${NC}"
+echo -e "${CYAN}╔═══════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║    Installation Complete! ✓                  ║${NC}"
+echo -e "${CYAN}╚═══════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "${GREEN}📦 Installation Directory:${NC}"
 echo "   $INSTALL_DIR"
 echo ""
+echo -e "${GREEN}🔐 Security Configuration:${NC}"
+echo "   ✓ Secure API key generated and saved to .env"
+echo "   ✓ .env file permissions: 600 (restricted access)"
+echo "   ✓ API key will NOT be logged or displayed"
+echo ""
 echo -e "${GREEN}🚀 Getting Started:${NC}"
 echo ""
-echo -e "   ${CYAN}1. Configure settings (optional):${NC}"
+echo -e "   ${CYAN}1. Review configuration (optional):${NC}"
 echo "      sudo nano $INSTALL_DIR/.env"
+echo "      (Your API key has been automatically generated)"
 echo ""
 echo -e "   ${CYAN}2. Start service:${NC}"
 echo "      sudo systemctl start nginx-inspector"
@@ -260,18 +296,28 @@ echo ""
 echo -e "   ${CYAN}6. Access Web Dashboard:${NC}"
 echo "      http://localhost:8080"
 echo ""
-echo -e "   ${CYAN}7. Test API:${NC}"
-echo "      curl http://localhost:8765/api/health"
+echo -e "   ${CYAN}7. Test API (requires authentication):${NC}"
+echo "      # Get API key from .env file"
+echo "      API_KEY=\$(grep NGINX_INSPECTOR_API_KEY $INSTALL_DIR/.env | cut -d'=' -f2)"
+echo "      curl -H \"X-API-Key: \$API_KEY\" http://localhost:8765/api/health"
 echo ""
 echo -e "${GREEN}📚 For more information:${NC}"
 echo "   https://github.com/shuvo-halder/nginx-inspector"
+echo "   See .env.example for detailed configuration options"
 echo ""
-echo -e "${YELLOW}⚠ Important Configuration:${NC}"
-echo "   - Edit .env file: sudo nano $INSTALL_DIR/.env"
-echo "   - Change NGINX_INSPECTOR_API_KEY for production"
-echo "   - Adjust API_PORT and WEB_PORT as needed"
-echo "   - Check logs: sudo journalctl -u nginx-inspector -f"
-echo "   - Restart after config changes: sudo systemctl restart nginx-inspector"
+echo -e "${YELLOW}⚠ Important Security Notes:${NC}"
+echo "   ✓ API key has been securely generated"
+echo "   ✓ Store .env file safely - DO NOT commit to git"
+echo "   ✓ Change HOST to 0.0.0.0 only if you need remote access"
+echo "   ✓ Use HTTPS in production (reverse proxy recommended)"
+echo "   ✓ Restrict CORS_ORIGINS to your specific domains"
+echo "   ✓ Set DEBUG=False in production"
+echo "   ✓ Keep .env file permissions at 600"
+echo "   ✓ Rotate API keys regularly"
+echo ""
+echo -e "${CYAN}To regenerate API key:${NC}"
+echo "   python3 -c \"import secrets; print(secrets.token_hex(32))\""
+echo "   Then update NGINX_INSPECTOR_API_KEY in .env"
 echo ""
 
 exit 0
