@@ -90,12 +90,23 @@ verify_installation() {
     if [ ! -d "$VENV_DIR" ]; then
         error_exit "Virtual environment not found: $VENV_DIR\nPlease run: sudo bash install.sh"
     fi
+    
+    if [ ! -f "$ENV_FILE" ]; then
+        error_exit "Configuration file not found: $ENV_FILE\nPlease run: sudo bash install.sh"
+    fi
 }
 
 # Function to check if systemd service exists
 check_service() {
     if ! command -v systemctl &> /dev/null; then
         error_exit "systemctl not found. This system may not use systemd."
+    fi
+}
+
+# Function to check if running with sudo for systemd operations
+check_sudo() {
+    if [ "$EUID" -ne 0 ]; then
+        error_exit "This command must be run with sudo"
     fi
 }
 
@@ -283,12 +294,20 @@ uninstall_app() {
 case "$1" in
     start)
         check_service
+        check_sudo
+        verify_installation
         info_msg "Starting nginx-inspector service..."
         
-        if sudo systemctl start nginx-inspector; then
+        if systemctl start nginx-inspector; then
             success_msg "Service started successfully"
-            echo -e "${CYAN}API Server:${NC} http://localhost:8765"
-            echo -e "${CYAN}Web Dashboard:${NC} http://localhost:8080"
+            sleep 2
+            if systemctl is-active --quiet nginx-inspector; then
+                success_msg "Service is running"
+                echo -e "${CYAN}API Server:${NC} http://localhost:8765"
+                echo -e "${CYAN}Web Dashboard:${NC} http://localhost:8080"
+            else
+                error_exit "Service failed to start. Check logs: sudo journalctl -u nginx-inspector -n 50"
+            fi
         else
             error_exit "Failed to start service. Check logs: sudo journalctl -u nginx-inspector -n 50"
         fi
@@ -296,9 +315,10 @@ case "$1" in
     
     stop)
         check_service
+        check_sudo
         info_msg "Stopping nginx-inspector service..."
         
-        if sudo systemctl stop nginx-inspector; then
+        if systemctl stop nginx-inspector; then
             success_msg "Service stopped successfully"
         else
             error_exit "Failed to stop service"
@@ -307,10 +327,18 @@ case "$1" in
     
     restart)
         check_service
+        check_sudo
+        verify_installation
         info_msg "Restarting nginx-inspector service..."
         
-        if sudo systemctl restart nginx-inspector; then
+        if systemctl restart nginx-inspector; then
             success_msg "Service restarted successfully"
+            sleep 2
+            if systemctl is-active --quiet nginx-inspector; then
+                success_msg "Service is running"
+            else
+                error_exit "Service failed to restart. Check logs: sudo journalctl -u nginx-inspector -n 50"
+            fi
         else
             error_exit "Failed to restart service. Check logs: sudo journalctl -u nginx-inspector -n 50"
         fi
@@ -318,7 +346,7 @@ case "$1" in
     
     status)
         check_service
-        sudo systemctl status nginx-inspector
+        systemctl status nginx-inspector
         ;;
     
     analyze)
@@ -377,13 +405,13 @@ case "$1" in
         
         # Check if port is already in use
         if command -v lsof &> /dev/null; then
-            PORT="${PORT:-8765}"
+            PORT="${API_PORT:-8765}"
             if lsof -i ":$PORT" > /dev/null 2>&1; then
-                error_exit "Port $PORT is already in use. Change PORT in .env or kill the process."
+                error_exit "Port $PORT is already in use. Change API_PORT in .env or kill the process."
             fi
         fi
         
-        success_msg "API server running on http://localhost:${PORT:-8765}"
+        success_msg "API server running on http://localhost:${API_PORT:-8765}"
         echo -e "${YELLOW}Press Ctrl+C to stop${NC}"
         echo ""
         
